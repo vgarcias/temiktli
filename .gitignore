@@ -1,0 +1,8 @@
+target/
+dist/
+.superpowers/
+/Captura*.png
+/*.mp4
+/content-large_groups*
+/handoff-*.md
+.impeccable/

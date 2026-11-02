@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>/*I18N_JS*/</script>
+<title data-i18n="menu.page_title"></title>
+<style>
+  :root {
+    --bg: #f6f6f8; --panel: #fff; --fg: #1f2328; --muted: #6b7280; --line: #d8dbe0;
+    --accent: #2563eb; --danger: #b42318; --field: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1d21; --panel: #24272c; --fg: #e6e8eb; --muted: #9aa1ab; --line: #383c43;
+      --accent: #5b8def; --danger: #f97066; --field: #1b1d21;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--panel); color: var(--fg); font: 13px/1.4 system-ui, "Segoe UI", sans-serif;
+    border: 1px solid var(--line); border-top: 2px solid var(--accent); overflow: hidden;
+  }
+  .menu { height: 100%; overflow-y: auto; padding: 10px; }
+  .menu[hidden] { display: none; }
+  /* Menús de órdenes (Archivo, Edición, Vista): una lista compacta, sin título. */
+  .menu.compact { padding: 4px; position: relative; overflow: visible; }
+  h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  button {
+    font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 4px; padding: 3px 8px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  input {
+    font: inherit; color: var(--fg); background: var(--field); border: 1px solid var(--line);
+    border-radius: 4px; padding: 3px 6px; width: 100%;
+  }
+  input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  .empty { color: var(--muted); }
+
+  /* Listas de órdenes y submenús */
+  /* Miden lo que ocupa su contenido (no el de la ventana): de eso depende el tamaño que se pide. */
+  .list, .sublist { display: flex; flex-direction: column; width: max-content; min-width: 200px; }
+  .sublist { position: absolute; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+  .sublist[hidden] { display: none; }
+  .item {
+    display: flex; align-items: center; gap: 18px; width: 100%; text-align: left; border: 0;
+    background: none; border-radius: 3px; padding: 6px 10px; white-space: nowrap;
+  }
+  .item:hover:not(:disabled), .item.open { background: var(--bg); }
+  .item .grow { flex: 1; }
+  .item kbd { color: var(--muted); font: 11px system-ui, "Segoe UI", sans-serif; }
+  .item .arrow { color: var(--muted); }
+  .item::before { content: ""; width: 12px; flex: none; }
+  .sublist .item.on::before { content: "✓"; color: var(--accent); }
+  .rule { height: 1px; background: var(--line); margin: 4px 6px; }
+
+  /* Snippets */
+  .group-label { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 8px 10px 2px; }
+  .item .del { color: var(--muted); padding: 0 6px; border-radius: 3px; }
+  .item .del:hover { color: var(--danger); }
+  .item .del.armed { color: var(--danger); font-size: 11px; }
+  .snipform { display: flex; gap: 4px; padding: 6px 10px; }
+  .snipform input { flex: 1; min-width: 0; }
+  .item.disabled { opacity: .45; cursor: default; }
+
+  /* Insertar etiquetas: cada categoría abre un submenú con sus etiquetas, una por fila (como Vista).
+     Las filas son algo más bajas para que categorías largas como Formato quepan en la ventana. */
+  .sublist.tags { min-width: 150px; }
+  .sublist.tags .item { padding: 3px 10px; }
+
+  /* Buscar en archivos */
+  .sitefind { display: grid; grid-template-columns: 1fr auto auto auto; gap: 4px; margin-bottom: 4px; }
+  .sitefind input { min-width: 0; }
+  .sitereplace { display: grid; grid-template-columns: 1fr auto; gap: 4px; margin-bottom: 12px; }
+  .sitereplace input { min-width: 0; }
+  .sitefind .opt { padding: 3px 6px; min-width: 26px; }
+  .sitefind .opt[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #scount { font-size: 11px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  #scount.err { color: var(--danger); }
+  .results { max-height: calc(100vh - 200px); overflow: auto; }
+  .results .rf { font-weight: 600; margin-top: 6px; word-break: break-all; }
+  .results .rf:first-child { margin-top: 0; }
+  .results .rf small { color: var(--muted); font-weight: 400; }
+  .results .hit { display: flex; gap: 6px; width: 100%; text-align: left; border: 0; border-radius: 3px;
+                  background: none; padding: 1px 2px; font: 12px ui-monospace, Consolas, monospace; }
+  .results .hit:hover { background: var(--bg); }
+  .results .ln { color: var(--muted); min-width: 3ch; text-align: right; flex: none; }
+  .results .tx { white-space: pre; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .results mark { background: #ffe066; color: #1f2328; border-radius: 2px; }
+
+  /* Revisión */
+  .auto { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 12px; cursor: pointer; }
+  .auto input { width: auto; margin: 0; }
+  #cleanhtml, #indenthtml, #minifyhtml { display: block; margin-top: 4px; }
+  #cleanhtml { margin-top: 8px; }
+  #rsummary { margin: 12px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .issues { max-height: calc(100vh - 140px); overflow: auto; }
+  .issue { display: grid; grid-template-columns: 16px 1fr; gap: 6px; border-radius: 3px; padding: 4px 2px; align-items: start; }
+  .issue:hover { background: var(--bg); }
+  /* El texto del aviso lleva al elemento; el botón de abajo (si lo hay) lo arregla. */
+  .issue .go { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 0; font: inherit; color: var(--fg); }
+  .issue .go:disabled { cursor: default; opacity: 1; }
+  .issue .fix { margin-top: 6px; font-size: 12px; padding: 2px 9px; border-color: var(--accent); color: var(--accent); }
+  .issue .fix:hover:not(:disabled) { background: var(--accent); color: #fff; }
+  .issues.stale .issue { opacity: .6; }
+  .issue .ic { font-weight: 700; text-align: center; }
+  .issue.error .ic { color: var(--danger); }
+  .issue.warning .ic { color: #b7791f; }
+  .issue.info .ic { color: var(--accent); }
+  .issue .msg { font-size: 12px; line-height: 1.35; }
+  .issue .tag { color: var(--muted); font: 11px ui-monospace, Consolas, monospace; display: block; }
+</style>
+</head>
+<body>
+<div class="menu compact" id="m-file" hidden>
+  <div class="list">
+    <button class="item" data-msg="Open"><span class="grow" data-i18n="menu.file.open"></span><kbd>Ctrl+O</kbd></button>
+    <button class="item" data-msg="Save"><span class="grow" data-i18n="menu.file.save"></span><kbd>Ctrl+S</kbd></button>
+    <button class="item" data-msg="SaveAs"><span class="grow" data-i18n="menu.file.save_as"></span><kbd data-i18n="keys.save_as"></kbd></button>
+    <div class="rule"></div>
+    <button class="item" data-msg="CloseDocument" data-i18n-title="menu.file.close_title"><span class="grow" data-i18n="menu.file.close"></span></button>
+  </div>
+</div>
+
+<div class="menu compact" id="m-edit" hidden>
+  <div class="list">
+    <button class="item" data-msg="Copy" id="i-copy" data-i18n-title="menu.edit.copy_title"><span class="grow" data-i18n="menu.edit.copy"></span><kbd>Ctrl+C</kbd></button>
+    <button class="item" data-msg="Paste" id="i-paste" data-i18n-title="menu.edit.paste_title"><span class="grow" data-i18n="menu.edit.paste"></span><kbd>Ctrl+V</kbd></button>
+    <div class="rule"></div>
+    <button class="item" data-msg="Undo" id="i-undo"><span class="grow" data-i18n="menu.edit.undo"></span><kbd>Ctrl+Z</kbd></button>
+    <button class="item" data-msg="Redo" id="i-redo"><span class="grow" data-i18n="menu.edit.redo"></span><kbd>Ctrl+Y</kbd></button>
+  </div>
+</div>
+
+<div class="menu compact" id="m-tags" hidden></div>
+
+<div class="menu compact" id="m-snippets" hidden>
+  <div class="list" id="snip-list"></div>
+</div>
+
+<div class="menu compact" id="m-view" hidden>
+  <div class="list">
+    <button class="item sub" data-sub="viewport"><span class="grow" data-i18n="menu.view.viewport"></span><span class="arrow">▸</span></button>
+    <button class="item sub" data-sub="layout"><span class="grow" data-i18n="menu.view.layout"></span><span class="arrow">▸</span></button>
+    <button class="item sub" data-sub="theme"><span class="grow" data-i18n="menu.view.theme"></span><span class="arrow">▸</span></button>
+    <button class="item sub" data-sub="language"><span class="grow" data-i18n="menu.view.language"></span><span class="arrow">▸</span></button>
+  </div>
+  <div class="sublist" id="sub-viewport" hidden data-i18n-title="menu.view.viewport_title">
+    <button class="item" data-value=""><span class="grow" data-i18n="menu.view.viewport_full"></span></button>
+    <button class="item" data-value="375"><span class="grow" data-i18n="menu.view.viewport_mobile"></span><kbd>375</kbd></button>
+    <button class="item" data-value="768"><span class="grow" data-i18n="menu.view.viewport_tablet"></span><kbd>768</kbd></button>
+    <button class="item" data-value="1024"><span class="grow" data-i18n="menu.view.viewport_desktop"></span><kbd>1024</kbd></button>
+  </div>
+  <div class="sublist" id="sub-layout" hidden data-i18n-title="menu.view.layout_title">
+    <button class="item" data-value="below"><span class="grow" data-i18n="menu.view.layout_below"></span></button>
+    <button class="item" data-value="side"><span class="grow" data-i18n="menu.view.layout_side"></span></button>
+    <button class="item" data-value="code"><span class="grow" data-i18n="menu.view.layout_code"></span></button>
+    <button class="item" data-value="canvas"><span class="grow" data-i18n="menu.view.layout_canvas"></span></button>
+  </div>
+  <div class="sublist" id="sub-theme" hidden data-i18n-title="menu.view.theme_title">
+    <button class="item" data-value="system"><span class="grow" data-i18n="menu.view.theme_system"></span></button>
+    <button class="item" data-value="light"><span class="grow" data-i18n="menu.view.theme_light"></span></button>
+    <button class="item" data-value="dark"><span class="grow" data-i18n="menu.view.theme_dark"></span></button>
+  </div>
+  <!-- Idioma de la interfaz: la entrada "igual que el sistema" y los idiomas que trae el diccionario; lo rellena el JS. -->
+  <div class="sublist" id="sub-language" hidden data-i18n-title="menu.view.language_title"></div>
+</div>
+
+<div class="menu" id="m-search" hidden>
+  <h2 data-i18n="menu.search.title"></h2>
+  <div class="sitefind">
+    <input id="sq" data-i18n-placeholder="menu.search.placeholder" spellcheck="false">
+    <button id="scase" class="opt" aria-pressed="false" data-i18n-title="menu.search.case">Aa</button>
+    <button id="sword" class="opt" aria-pressed="false" data-i18n-title="menu.search.word">ab</button>
+    <button id="sregex" class="opt" aria-pressed="false" data-i18n-title="menu.search.regex">.*</button>
+  </div>
+  <div class="sitereplace">
+    <input id="sr" data-i18n-placeholder="menu.search.replace_placeholder" spellcheck="false">
+    <button id="srall" data-i18n="menu.search.replace_all" data-i18n-title="menu.search.replace_all_title"></button>
+  </div>
+  <div id="scount" class="empty"></div>
+  <div id="sresults" class="results"></div>
+</div>
+
+<div class="menu" id="m-review" hidden>
+  <h2 data-i18n="menu.review.title"></h2>
+  <button id="review" data-i18n="menu.review.run" data-i18n-title="menu.review.run_title"></button>
+  <label class="auto" data-i18n-title="menu.review.auto_title">
+    <input type="checkbox" id="autorev" checked> <span data-i18n="menu.review.auto"></span>
+  </label>
+  <button id="cleanhtml" data-i18n="menu.review.clean" data-i18n-title="menu.review.clean_title"></button>
+  <button id="indenthtml" data-i18n="menu.review.indent" data-i18n-title="menu.review.indent_title"></button>
+  <button id="minifyhtml" data-i18n="menu.review.minify" data-i18n-title="menu.review.minify_title"></button>
+  <div id="rsummary" class="empty"></div>
+  <div id="rlist" class="issues"></div>
+</div>
+
+<script>
+/*FIND_JS*/
+</script>
+<script>
+(function () {
+  const { t, tn } = window.__i18n;
+  window.__i18n.apply(document);
+  const send = (msg) => window.ipc.postMessage(JSON.stringify(msg));
+  const $ = (id) => document.getElementById(id);
+  const close = () => send({ type: 'CloseMenu' });
+
+  function el(tag, props, ...kids) {
+    const e = Object.assign(document.createElement(tag), props || {});
+    kids.forEach((k) => e.append(k));
+    return e;
+  }
+
+  let state = null;      // último estado de la aplicación (para activar o desactivar órdenes)
+  let current = null;    // menú abierto
+
+  // ---------- Archivo y Edición: órdenes directas ----------
+  // Primero se cierra el menú y luego se ejecuta la orden: así un diálogo (Abrir…) no
+  // aparece con el menú todavía encima.
+  document.querySelectorAll('[data-msg]').forEach((b) =>
+    b.addEventListener('click', () => { close(); send({ type: b.dataset.msg }); }));
+
+  function refreshCommands() {
+    if (!state) return;
+    $('i-copy').disabled = !state.selection || !state.selection.can_delete;
+    $('i-paste').disabled = !state.can_paste;
+    $('i-undo').disabled = !state.can_undo;
+    $('i-redo').disabled = !state.can_redo;
+  }
+
+  // ---------- Vista: submenús ----------
+  const SUBMENUS = {
+    viewport: (v) => send({ type: 'SetViewport', width: v ? Number(v) : null }),
+    layout: (v) => send({ type: 'SetLayout', layout: v }),
+    theme: (v) => send({ type: 'SetTheme', theme: v }),
+    language: (v) => send({ type: 'SetLanguage', lang: v }),
+  };
+
+  // Vista → Idioma: la primera entrada sigue al sistema; el resto son los idiomas que trae el
+  // diccionario, cada uno escrito en su propia lengua. Se construye antes de cablear los submenús.
+  (function buildLanguageMenu() {
+    const sub = $('sub-language');
+    const option = (value, text) => {
+      const b = el('button', { className: 'item' }, el('span', { className: 'grow', textContent: text }));
+      b.dataset.value = value;
+      return b;
+    };
+    sub.append(option('system', t('menu.view.language_system')));
+    (window.__i18n.dict['$languages'] || []).forEach((l) => sub.append(option(l.code, l.name)));
+  })();
+
+  // Abre (o cierra, con `null`) el submenú `name` del menú `menuId`, a la derecha de su opción.
+  // Un submenú dentro de otro (`t4g0` cuelga de `t4`) abre toda la cadena: se muestran los dos.
+  function showSub(menuId, name) {
+    const menu = $(menuId);
+    const nested = name && /^(t\d+)g\d+$/.exec(name);
+    const chain = !name ? [] : nested ? [nested[1], name] : [name];
+    menu.querySelectorAll('.item.sub').forEach((b) => b.classList.toggle('open', chain.includes(b.dataset.sub)));
+    menu.querySelectorAll('.sublist').forEach((s) => { s.hidden = !chain.some((n) => s.id === 'sub-' + n); });
+
+    // Cada submenú, a la derecha del anterior y a la altura de la opción que lo abrió. Si así se
+    // saldría por abajo (listas largas), se sube.
+    const MAX_BOTTOM = 640;
+    let container = menu.querySelector('.list');
+    for (const n of chain) {
+      const item = menu.querySelector('.item.sub[data-sub="' + n + '"]');
+      const sub = $('sub-' + n);
+      // Las opciones de la lista principal miden desde el menú; las de un submenú, desde él.
+      const base = container.classList.contains('list') ? 0 : container.offsetTop;
+      let top = base + item.offsetTop - 4;
+      if (top + sub.offsetHeight > MAX_BOTTOM) top = Math.max(0, MAX_BOTTOM - sub.offsetHeight);
+      sub.style.top = top + 'px';
+      sub.style.left = container.offsetLeft + container.offsetWidth + 2 + 'px';
+      container = sub;
+    }
+    report();
+  }
+
+  function wireSubmenus(menuId) {
+    $(menuId).querySelectorAll('.item.sub').forEach((b) => {
+      b.addEventListener('mouseenter', () => showSub(menuId, b.dataset.sub));
+      b.addEventListener('click', () => showSub(menuId, b.dataset.sub));
+    });
+  }
+  wireSubmenus('m-view');
+
+  // ---------- Insertar etiquetas ----------
+  // El catálogo lo pone Rust (el mismo que decide qué etiquetas sabe crear el editor): una lista
+  // de { name, tags, groups }. Una categoría larga viene repartida en `groups` ([nombre, etiquetas]).
+  const CATEGORIES = /*TAGS_JSON*/[];
+  (function buildTagsMenu() {
+    const menu = $('m-tags');
+    const list = el('div', { className: 'list' });
+    const entry = (name, id) => {
+      const item = el('button', { className: 'item sub' }, el('span', { className: 'grow', textContent: name }), el('span', { className: 'arrow', textContent: '▸' }));
+      item.dataset.sub = id;
+      return item;
+    };
+    const tagItem = (tag) => {
+      const b = el('button', { className: 'item' }, el('span', { className: 'grow', textContent: tag }));
+      b.title = t('menu.tags.insert_title', { tag });
+      // Primero se cierra el menú: si no cabe la etiqueta, el aviso se ve sin nada encima.
+      b.addEventListener('click', () => { close(); send({ type: 'Insert', tag }); });
+      return b;
+    };
+    CATEGORIES.forEach((cat, i) => {
+      list.append(entry(cat.name, 't' + i));
+      const sub = el('div', { className: 'sublist tags', id: 'sub-t' + i, hidden: true });
+      if (cat.groups.length) {
+        cat.groups.forEach(([groupName, tags], g) => {
+          sub.append(entry(groupName, 't' + i + 'g' + g));
+          const inner = el('div', { className: 'sublist tags', id: 'sub-t' + i + 'g' + g, hidden: true });
+          tags.forEach((tag) => inner.append(tagItem(tag)));
+          menu.append(inner);
+        });
+      } else {
+        cat.tags.forEach((tag) => sub.append(tagItem(tag)));
+      }
+      menu.append(sub);
+    });
+    menu.prepend(list);
+    wireSubmenus('m-tags');
+  })();
+  for (const [name, onPick] of Object.entries(SUBMENUS)) {
+    $('sub-' + name).querySelectorAll('.item').forEach((b) =>
+      b.addEventListener('click', () => { onPick(b.dataset.value); close(); }));
+  }
+
+  function markChoices() {
+    if (!state) return;
+    const now = {
+      viewport: state.viewport === null ? '' : String(state.viewport),
+      layout: state.layout,
+      theme: state.theme,
+      language: state.language,
+    };
+    for (const [name, value] of Object.entries(now)) {
+      $('sub-' + name).querySelectorAll('.item').forEach((b) => b.classList.toggle('on', b.dataset.value === value));
+    }
+  }
+
+  // ---------- Snippets ----------
+  // Rust manda la lista (nombres, sin el HTML): primero los de serie y luego los propios.
+  // Los números que se le devuelven son posiciones en esa lista.
+  let snippetList = [];
+  let lastCanSave = false;  // la última vez que se supo si había algo que guardar
+  let armedDelete = null;   // el borrado pide una segunda pulsación; esta es la que está «armada»
+
+  function renderSnippets() {
+    const list = $('snip-list');
+    list.replaceChildren();
+    const section = (title, items) => {
+      if (!items.length) return;
+      list.append(el('div', { className: 'group-label', textContent: title }));
+      items.forEach(({ s, index }) => {
+        const item = el('button', { className: 'item', title: t('menu.snippets.insert_title') },
+          el('span', { className: 'grow', textContent: s.name }));
+        if (!s.builtin) {
+          const del = el('span', { className: 'del', textContent: '×', title: t('menu.snippets.delete_title') });
+          del.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (armedDelete !== index) {
+              // Primera pulsación: pide confirmar. Se desarma sola si no se confirma.
+              armedDelete = index;
+              del.textContent = t('menu.snippets.confirm_delete');
+              del.classList.add('armed');
+              setTimeout(() => {
+                if (armedDelete !== index) return;
+                armedDelete = null;
+                if (!document.querySelector('.snipform')) renderSnippets();   // sin pisar un nombre a medias
+              }, 2500);
+            } else {
+              armedDelete = null;
+              send({ type: 'DeleteSnippet', index });
+            }
+          });
+          item.append(del);
+        }
+        item.addEventListener('click', () => { close(); send({ type: 'InsertSnippet', index }); });
+        list.append(item);
+      });
+    };
+    const indexed = snippetList.map((s, index) => ({ s, index }));
+    section(t('menu.snippets.builtin'), indexed.filter((x) => x.s.builtin));
+    section(t('menu.snippets.mine'), indexed.filter((x) => !x.s.builtin));
+    list.append(el('div', { className: 'rule' }), saveRow());
+    report();
+  }
+
+  // Guardar la selección como snippet: pide el nombre ahí mismo, sin otra ventana.
+  function saveRow() {
+    const has = !!(state && state.selection && state.selection.can_delete);
+    lastCanSave = has;
+    const item = el('button', { className: 'item' + (has ? '' : ' disabled'), id: 'snip-save',
+      title: t(has ? 'menu.snippets.save_title' : 'menu.snippets.save_title_disabled') },
+      el('span', { className: 'grow', textContent: t('menu.snippets.save') }));
+    item.addEventListener('click', () => {
+      if (!has) return;
+      const input = el('input', { placeholder: t('menu.snippets.name_placeholder'), maxLength: 60, spellcheck: false });
+      const ok = el('button', { textContent: t('menu.snippets.save_button') });
+      const submit = () => { if (input.value.trim()) send({ type: 'SaveSnippet', name: input.value }); };
+      ok.addEventListener('click', submit);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+      item.replaceWith(el('div', { className: 'snipform' }, input, ok));
+      input.focus();
+      report();
+    });
+    return item;
+  }
+
+  // ---------- Buscar en archivos ----------
+  const find = window.htmlFind;
+  const sopt = { caseSensitive: false, regex: false, word: false };
+  const MAX_HITS = 500, MAX_PER_FILE = 100, CONTEXT = 160;
+  let siteData = null, searchTimer = null;
+
+  function renderSearch() {
+    const box = $('sresults'), count = $('scount');
+    box.replaceChildren();
+    count.className = 'empty';
+    const q = $('sq').value;
+    if (!q) { count.textContent = ''; return; }
+    const { re, error } = find.compile(q, sopt);
+    if (error) { count.className = 'empty err'; count.textContent = t('status.warning_prefix') + error; return; }
+    if (!siteData) { count.textContent = t('menu.search.searching'); return; }
+    let hits = 0, filesHit = 0, capped = false;
+    for (const f of siteData.files) {
+      const { matches } = find.findAll(f.text, re);
+      if (!matches.length) continue;
+      if (hits >= MAX_HITS) { capped = true; break; }
+      filesHit++;
+      const shown = matches.slice(0, Math.min(MAX_PER_FILE, MAX_HITS - hits));
+      if (shown.length < matches.length) capped = true;
+      box.append(el('div', { className: 'rf' }, f.path + ' ', el('small', { textContent: '(' + matches.length + ')' })));
+      for (const m of shown) {
+        const { line, col } = lineAndColumn(f.text, m.start);
+        const lineStart = m.start - col;
+        let lineEnd = f.text.indexOf('\n', m.start);
+        if (lineEnd < 0) lineEnd = f.text.length;
+        // Líneas largas (CSS minificado): solo el entorno de la coincidencia.
+        const from = Math.max(lineStart, m.start - 30), to = Math.min(lineEnd, from + CONTEXT);
+        const end = Math.min(m.end, to);
+        const row = el('button', { className: 'hit', title: f.path + ':' + (line + 1) });
+        const tx = el('span', { className: 'tx' });
+        tx.append((from > lineStart ? '…' : '') + f.text.slice(from, m.start).replace(/^\s+/, ''),
+          el('mark', { textContent: f.text.slice(m.start, end) }), f.text.slice(end, to).replace(/\r$/, ''));
+        row.append(el('span', { className: 'ln', textContent: String(line + 1) }), tx);
+        row.addEventListener('click', () =>
+          send({ type: 'GoTo', path: f.path, line, col, len: m.end - m.start }));
+        box.append(row);
+        hits++;
+      }
+    }
+    const skipped = siteData.skipped ? t('menu.search.skipped', { n: siteData.skipped }) : '';
+    count.textContent = (hits
+      ? t('menu.search.hits', { hits: hits + (capped ? '+' : ''), files: tn('units.file', filesHit) })
+      : t('menu.search.no_results')) + skipped;
+  }
+
+  function lineAndColumn(text, pos) {
+    const before = pos === 0 ? -1 : text.lastIndexOf('\n', pos - 1);
+    let line = 0;
+    for (let i = text.indexOf('\n'); i >= 0 && i < pos; i = text.indexOf('\n', i + 1)) line++;
+    return { line, col: pos - (before + 1) };
+  }
+
+  // Cada búsqueda vuelve a leer los archivos: así refleja lo que se acaba de editar.
+  function requestSearch() {
+    clearTimeout(searchTimer);
+    if (!$('sq').value) { siteData = null; renderSearch(); return; }
+    siteData = null;
+    renderSearch();
+    searchTimer = setTimeout(() => send({ type: 'SearchSite' }), 250);
+  }
+  // El reemplazo se calcula aquí (con el mismo motor que la búsqueda) y Rust lo aplica
+  // tras confirmarlo. Sin resultados cargados no se hace nada.
+  $('srall').addEventListener('click', () => {
+    const q = $('sq').value;
+    const { re } = find.compile(q, sopt);
+    if (!q || !re || !siteData) return;
+    const changes = [];
+    let total = 0;
+    for (const f of siteData.files) {
+      const r = find.replaceAll(f.text, re, $('sr').value, sopt.regex);
+      if (!r.count) continue;
+      total += r.count;
+      changes.push({ path: f.path, from_len: f.text.length, text: r.text });
+    }
+    if (!changes.length) return;
+    send({ type: 'ReplaceInSite', count: total, files: changes });
+    requestSearch();
+  });
+  $('sq').addEventListener('input', requestSearch);
+  $('sq').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); requestSearch(); } });
+  for (const [id, key] of [['scase', 'caseSensitive'], ['sword', 'word'], ['sregex', 'regex']]) {
+    $(id).addEventListener('click', () => {
+      sopt[key] = !sopt[key];
+      $(id).setAttribute('aria-pressed', String(sopt[key]));
+      requestSearch();
+    });
+  }
+
+  // ---------- Revisión: validación y accesibilidad ----------
+  // Icono, clase CSS y clave del plural (`units.error_one` / `units.error_other`…) de cada gravedad.
+  const SEVERITY = { error: ['✖', 'error', 'units.error'], warning: ['▲', 'warning', 'units.warning'], info: ['ℹ', 'info', 'units.info'] };
+
+  function renderReview(data, stale) {
+    const list = $('rlist'), summary = $('rsummary');
+    list.classList.toggle('stale', !!stale);
+    list.replaceChildren();
+    const issues = data.issues;
+    const counts = { error: 0, warning: 0, info: 0 };
+    issues.forEach((i) => counts[i.severity]++);
+    const parts = Object.keys(SEVERITY).filter((k) => counts[k]).map((k) => tn(SEVERITY[k][2], counts[k]));
+    let text = parts.length ? parts.join(' · ') : t('menu.review.ok');
+    if (stale) text = t('menu.review.stale');
+    else if (data.contrast === null) text += t('menu.review.contrast_measuring');
+    else if (data.contrast.checked === 0) text += t('menu.review.contrast_unavailable');
+    else text += t('menu.review.contrast_checked', { n: data.contrast.checked }) +
+      (data.contrast.skipped ? t('menu.review.contrast_skipped', { n: data.contrast.skipped }) : '');
+    summary.className = 'empty';
+    summary.textContent = text;
+    issues.forEach((i, index) => {
+      const [icon, cls] = SEVERITY[i.severity];
+      const row = el('div', { className: 'issue ' + cls });
+      const go = el('button', { className: 'go msg', disabled: !!stale || i.id === null });
+      go.append(i.message);
+      go.append(el('span', { className: 'tag', textContent: t(i.category === 'accessibility' ? 'menu.review.category_accessibility' : 'menu.review.category_html') + ' · ' + i.rule }));
+      if (i.id !== null) {
+        go.title = t('menu.review.go_to_element');
+        go.addEventListener('click', () => send({ type: 'Select', id: i.id }));
+      }
+      const body = el('div', { className: 'body' }, go);
+      if (i.fix) {
+        // El número es la posición en la lista que Rust guardó: así sabe de qué aviso se trata.
+        const fix = el('button', { className: 'fix', textContent: t('menu.review.fix', { label: i.fix.label }), disabled: !!stale, title: t('menu.review.fix_title') });
+        fix.addEventListener('click', () => send({ type: 'FixIssue', index }));
+        body.append(fix);
+      }
+      row.append(el('span', { className: 'ic', textContent: icon }), body);
+      list.append(row);
+    });
+  }
+  // Revisar al guardar: activada por defecto; se recuerda la elección si el entorno lo permite.
+  let autoReview = true;
+  try { autoReview = localStorage.getItem('tk-auto-review') !== '0'; } catch (_) { /* sin almacenamiento */ }
+  $('autorev').checked = autoReview;
+  $('autorev').addEventListener('change', (e) => {
+    autoReview = e.target.checked;
+    try { localStorage.setItem('tk-auto-review', autoReview ? '1' : '0'); } catch (_) { /* sin almacenamiento */ }
+    send({ type: 'SetAutoReview', on: autoReview });
+  });
+
+  let lastReview = null;
+  $('review').addEventListener('click', () => {
+    $('rsummary').textContent = t('menu.review.reviewing');
+    send({ type: 'Review' });
+  });
+
+  $('cleanhtml').addEventListener('click', () => send({ type: 'CleanHtml' }));
+  $('indenthtml').addEventListener('click', () => send({ type: 'IndentHtml' }));
+  $('minifyhtml').addEventListener('click', () => send({ type: 'MinifyHtml' }));
+
+  // ---------- Abrir, medir y cerrar ----------
+  const MENUS = ['file', 'edit', 'tags', 'snippets', 'view', 'search', 'review'];
+
+  // Los menús de órdenes miden lo que necesitan (con el submenú abierto, si lo hay) y se
+  // lo dicen a Rust para que ajuste la ventana. Buscar y Revisión tienen tamaño fijo.
+  // Solo se avisa cuando el tamaño cambia de verdad. Avisar siempre haría que cada aviso provocase
+  // una actualización de estado, que redibuja el menú, que vuelve a avisar…: un bucle sin fin.
+  let lastReported = '';
+
+  function report() {
+    if (!current) return;
+    let width, height;
+    if (current === 'search' || current === 'review') {
+      width = 470; height = 540;
+    } else {
+      // Lo que ocupa la lista y todos los submenús abiertos (puede haber dos en cadena).
+      const m = $('m-' + current);
+      const list = m.querySelector('.list');
+      width = list.offsetLeft + list.offsetWidth;
+      height = list.offsetTop + list.offsetHeight;
+      m.querySelectorAll('.sublist:not([hidden])').forEach((s) => {
+        width = Math.max(width, s.offsetLeft + s.offsetWidth);
+        height = Math.max(height, s.offsetTop + s.offsetHeight);
+      });
+      width += 4 + 2;   // relleno del menú y borde
+      height += 4 + 3;
+    }
+    const key = Math.ceil(width) + 'x' + Math.ceil(height);
+    if (key === lastReported) return;
+    lastReported = key;
+    send({ type: 'MenuSize', width: Math.ceil(width), height: Math.ceil(height) });
+  }
+
+  window.__popup = {
+    open(name) {
+      current = name;
+      lastReported = '';   // Rust olvida el tamaño al abrir otro menú: hay que volver a decírselo
+      MENUS.forEach((m) => { $('m-' + m).hidden = m !== name; });
+      if (name === 'view' || name === 'tags') showSub('m-' + name, null);
+      if (name === 'snippets') { armedDelete = null; renderSnippets(); }
+      if (name === 'search') { $('sq').focus(); $('sq').select(); }
+      else document.body.focus();
+      refreshCommands();
+      markChoices();
+      report();
+    },
+    update(s) {
+      state = s;
+      refreshCommands();
+      markChoices();
+      // El único cambio de estado que afecta a la lista de snippets es poder guardar la selección
+      // o no. Solo entonces se redibuja (y nunca con un nombre a medio escribir): redibujar en
+      // cada actualización, que llegan con cada clic y cada tecla, perdía el ratón y el foco.
+      const canSave = !!(s.selection && s.selection.can_delete);
+      const changed = canSave !== lastCanSave;
+      lastCanSave = canSave;
+      if (changed && current === 'snippets' && !document.querySelector('.snipform')) renderSnippets();
+    },
+    snippets(list) {
+      snippetList = list;
+      if (current === 'snippets' && !document.querySelector('.snipform')) renderSnippets();
+    },
+    review(data) {
+      lastReview = data;
+      renderReview(data, false);
+    },
+    reviewStale() {
+      if (lastReview) renderReview(lastReview, true);
+    },
+    searchData(data) {
+      siteData = data;
+      renderSearch();
+    },
+  };
+
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+  // Hacer clic en otra parte de la ventana quita el foco a este menú: se cierra. Se espera un
+  // instante por si el foco vuelve enseguida (p. ej. al hacer clic dentro de él).
+  window.addEventListener('blur', () => setTimeout(() => { if (!document.hasFocus()) close(); }, 150));
+
+  send({ type: 'Ready' });
+  // Rust empieza con la revisión automática activada: se le dice lo que eligió la última vez.
+  send({ type: 'SetAutoReview', on: autoReview });
+})();
+</script>
+</body>
+</html>

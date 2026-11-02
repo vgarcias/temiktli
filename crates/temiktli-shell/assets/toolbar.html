@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>/*I18N_JS*/</script>
+<title data-i18n="toolbar.page_title"></title>
+<style>
+  :root {
+    --bg: #f6f6f8; --panel: #fff; --fg: #1f2328; --muted: #6b7280; --line: #d8dbe0; --accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1d21; --panel: #24272c; --fg: #e6e8eb; --muted: #9aa1ab; --line: #383c43; --accent: #5b8def;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: var(--panel); color: var(--fg); font: 13px/1 system-ui, "Segoe UI", sans-serif;
+    border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 2px; padding: 0 8px;
+    user-select: none;
+  }
+  button {
+    font: inherit; color: var(--fg); background: none; border: 1px solid transparent;
+    border-radius: 4px; padding: 6px 11px; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { background: var(--bg); border-color: var(--line); }
+  button[aria-expanded="true"] { background: var(--bg); border-color: var(--accent); }
+  /* Resultado de la última revisión: el número de errores (rojo), avisos (ámbar) o sugerencias (azul); ✔ si no hay nada */
+  .badge { display: inline-block; min-width: 18px; margin-left: 6px; padding: 2px 5px; border-radius: 9px; font-size: 11px; line-height: 1; text-align: center; color: #fff; }
+  .badge.error { background: #c0392b; }
+  .badge.warning { background: #b7791f; }
+  .badge.info { background: var(--accent); }
+  .badge.ok { background: #2f855a; }
+  .badge[hidden] { display: none; }
+  #file { margin-left: auto; color: var(--muted); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #file.dirty { color: var(--fg); font-weight: 600; }
+</style>
+</head>
+<body>
+  <button data-menu="file" aria-expanded="false" data-i18n="toolbar.file"></button>
+  <button data-menu="edit" aria-expanded="false" data-i18n="toolbar.edit"></button>
+  <button data-menu="search" aria-expanded="false" data-i18n="toolbar.search" data-i18n-title="toolbar.search_title"></button>
+  <button data-menu="tags" aria-expanded="false" data-i18n="toolbar.tags" data-i18n-title="toolbar.tags_title"></button>
+  <button data-menu="snippets" aria-expanded="false" data-i18n="toolbar.snippets" data-i18n-title="toolbar.snippets_title"></button>
+  <button data-menu="view" aria-expanded="false" data-i18n="toolbar.view"></button>
+  <button data-menu="review" aria-expanded="false" id="review-btn" data-i18n-title="toolbar.review_title"><span data-i18n="toolbar.review"></span><span class="badge" id="badge" hidden></span></button>
+  <div id="file" title=""></div>
+
+<script>
+(function () {
+  const { t, tn } = window.__i18n;
+  window.__i18n.apply(document);
+  const send = (msg) => window.ipc.postMessage(JSON.stringify(msg));
+  const $ = (id) => document.getElementById(id);
+
+  // Un menú se abre bajo su botón: Rust necesita saber dónde empieza (en píxeles lógicos).
+  document.querySelectorAll('[data-menu]').forEach((b) =>
+    b.addEventListener('click', () =>
+      send({ type: 'OpenMenu', name: b.dataset.menu, x: b.getBoundingClientRect().left })));
+
+  // El botón Revisión muestra lo más grave que encontró la última revisión (si sigue vigente).
+  function showReview(r) {
+    const badge = $('badge'), btn = $('review-btn');
+    if (!r) { badge.hidden = true; btn.title = t('toolbar.review_title'); return; }
+    const total = r.errors + r.warnings + r.infos;
+    const [kind, n] = r.errors ? ['error', r.errors] : r.warnings ? ['warning', r.warnings] : r.infos ? ['info', r.infos] : ['ok', 0];
+    badge.hidden = false;
+    badge.className = 'badge ' + kind;
+    badge.textContent = total === 0 ? '✔' : String(n);
+    const list = [r.errors && tn('units.error', r.errors), r.warnings && tn('units.warning', r.warnings), r.infos && tn('units.info', r.infos)]
+      .filter(Boolean).join(t('units.list_comma'));
+    btn.title = total === 0 ? t('toolbar.review_last_ok') : t('toolbar.review_last', { list });
+  }
+
+  window.__toolbar = {
+    update(s) {
+      const f = $('file');
+      f.textContent = (s.dirty ? '● ' : '') + s.file_name;
+      f.title = s.file_name;
+      f.classList.toggle('dirty', s.dirty);
+      showReview(s.review);
+    },
+    // Qué menú está abierto (`null` = ninguno), para marcar su botón.
+    menu(name) {
+      document.querySelectorAll('[data-menu]').forEach((b) =>
+        b.setAttribute('aria-expanded', String(b.dataset.menu === name)));
+    },
+  };
+
+  document.addEventListener('keydown', (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    const k = e.key.toLowerCase();
+    let msg = null;
+    if (mod && k === 's') msg = e.shiftKey ? 'SaveAs' : 'Save';
+    else if (mod && k === 'o') msg = 'Open';
+    else if (mod && k === 'z') msg = e.shiftKey ? 'Redo' : 'Undo';
+    else if (mod && k === 'y') msg = 'Redo';
+    if (msg) { e.preventDefault(); send({ type: msg }); }
+  });
+
+  send({ type: 'Ready' });
+})();
+</script>
+</body>
+</html>

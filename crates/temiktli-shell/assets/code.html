@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>/*I18N_JS*/</script>
+<title data-i18n="code.page_title"></title>
+<style>
+  :root {
+    --bg: #f6f6f8; --panel: #fff; --fg: #1f2328; --muted: #6b7280; --line: #d8dbe0;
+    --accent: #2563eb; --field: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1d21; --panel: #24272c; --fg: #e6e8eb; --muted: #9aa1ab; --line: #383c43;
+      --accent: #5b8def; --field: #16181b;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg); display: flex; flex-direction: column;
+    font: 13px/1.4 system-ui, "Segoe UI", sans-serif; overflow: hidden;
+  }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 10px; border-top: 2px solid var(--accent); border-bottom: 1px solid var(--line);
+    background: var(--panel); color: var(--muted); font-size: 12px;
+  }
+  header strong { color: var(--fg); font-weight: 600; }
+  #state.busy { color: var(--accent); }
+  .tabs { display: flex; gap: 2px; align-items: center; min-width: 0; overflow: hidden; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 4px;
+    border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer;
+    font: inherit; white-space: nowrap;
+  }
+  .tab:hover { border-color: var(--line); }
+  .tab.active { color: var(--fg); background: var(--bg); border-color: var(--line); font-weight: 600; }
+  .tab .x { opacity: .6; padding: 0 2px; border-radius: 3px; }
+  .tab .x:hover { opacity: 1; background: var(--line); }
+  .tab .dot { color: var(--accent); }
+  .left { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .wrapopt { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px;
+             cursor: pointer; white-space: nowrap; flex: none; }
+  .wrapopt input { margin: 0; width: auto; }
+
+  /* Colores de sintaxis (paleta clara / oscura) */
+  :root {
+    --c-tag: #1d4ed8; --c-attr: #b45309; --c-str: #15803d; --c-comment: #6b7280;
+    --c-doctype: #7e22ce; --c-ent: #7e22ce; --c-punct: #6b7280; --c-prop: #0e7490;
+    --c-sel: #b91c1c; --c-num: #c2410c; --c-at: #7e22ce; --c-fn: #0369a1; --c-kw: #7e22ce;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --c-tag: #7aa2f7; --c-attr: #e0af68; --c-str: #9ece6a; --c-comment: #7d8590;
+      --c-doctype: #bb9af7; --c-ent: #bb9af7; --c-punct: #8b93a1; --c-prop: #7dcfff;
+      --c-sel: #f7768e; --c-num: #ff9e64; --c-at: #bb9af7; --c-fn: #73daca; --c-kw: #bb9af7;
+    }
+  }
+
+  /* Columna de números de línea + editor */
+  .body { display: flex; flex: 1; min-height: 0; background: var(--field); }
+  .mono, #hl, #src, #gn, #mk {
+    /* Fuentes con nombre propio y la misma lista en el cuadro y en la capa de colores: con
+       `ui-monospace` Chromium elegía una fuente distinta en cada una y el cursor se desfasaba. */
+    font: 13px/20px "Cascadia Mono", Consolas, "Courier New", monospace;
+    font-variant-ligatures: none; letter-spacing: 0; word-spacing: 0; tab-size: 2; white-space: pre;
+  }
+  .gutter {
+    flex: none; overflow: hidden; background: var(--panel); border-right: 1px solid var(--line);
+    color: var(--muted); text-align: right; user-select: none; padding: 8px 8px 0;
+  }
+  #gn { margin: 0; }
+
+  /* El cuadro de texto (transparente) se superpone a una capa idéntica con colores. */
+  .editor { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+  #hl, #src { position: absolute; inset: 0; margin: 0; padding: 8px 10px; border: 0; }
+  #hl { overflow: hidden; pointer-events: none; color: var(--fg); }
+  /* El navegador fija `font-family: monospace` en <code>: sin `inherit` la capa de colores
+     usaría otra fuente (más estrecha) que el cuadro de texto y el cursor se desfasaría. */
+  #hlc { display: block; font: inherit; }
+  #src {
+    width: 100%; height: 100%; resize: none; outline: 0; overflow: auto;
+    background: transparent; color: transparent; -webkit-text-fill-color: transparent;
+    caret-color: var(--fg);
+  }
+  #src::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+  #probe { position: absolute; visibility: hidden; pointer-events: none; }
+
+  /* Ajuste de línea: las tres capas y el elemento de medida parten las líneas igual. El
+     cuadro reserva siempre el hueco de su barra de desplazamiento y las capas de color lo
+     descuentan (--sbw), así el ancho útil no cambia al aparecer la barra. */
+  #mirror { position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none; margin: 0;
+            padding: 0; border: 0; box-sizing: content-box; white-space: pre-wrap; overflow-wrap: break-word; }
+  body.wrap #hl, body.wrap #mk, body.wrap #src { white-space: pre-wrap; overflow-wrap: break-word; }
+  body.wrap #src { scrollbar-gutter: stable; overflow-x: hidden; }
+  body.wrap #hl, body.wrap #mk { right: var(--sbw, 0px); }
+
+  /* Coincidencias de la búsqueda: una capa detrás del texto, con la misma geometría. */
+  #mk { position: absolute; inset: 0; margin: 0; padding: 8px 10px; border: 0; overflow: hidden;
+        pointer-events: none; color: transparent; }
+  #mkc { display: block; font: inherit; }
+  mark.m { background: rgba(250, 204, 21, .38); color: transparent; border-radius: 2px; }
+  mark.cur { background: rgba(251, 146, 60, .7); color: transparent; border-radius: 2px; }
+
+  /* Barra de buscar y reemplazar */
+  .findbar { padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .frow { display: flex; gap: 4px; align-items: center; margin: 2px 0; }
+  .frow input {
+    flex: 1; min-width: 0; font: inherit; color: var(--fg); background: var(--field);
+    border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px;
+  }
+  .frow input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  .frow button {
+    font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 7px; cursor: pointer; min-width: 26px;
+  }
+  .frow button:hover { border-color: var(--accent); }
+  .frow button.opt[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .fcount { color: var(--muted); font-size: 12px; min-width: 76px; text-align: right; white-space: nowrap; }
+  .fcount.err { color: #f97066; }
+  .c-tag { color: var(--c-tag); } .c-attr { color: var(--c-attr); } .c-str { color: var(--c-str); }
+  .c-comment { color: var(--c-comment); font-style: italic; } .c-doctype { color: var(--c-doctype); }
+  .c-ent { color: var(--c-ent); } .c-punct { color: var(--c-punct); } .c-prop { color: var(--c-prop); }
+  .c-sel { color: var(--c-sel); } .c-num { color: var(--c-num); } .c-at { color: var(--c-at); }
+  .c-fn { color: var(--c-fn); } .c-kw { color: var(--c-kw); }
+
+  /* Lista de autocompletado */
+  #ac {
+    position: absolute; z-index: 5; min-width: 150px; max-width: 360px; max-height: 220px;
+    overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .25); padding: 2px;
+  }
+  #ac .item {
+    padding: 1px 8px; cursor: pointer; border-radius: 3px; white-space: pre; color: var(--fg);
+    font: 12px/18px "Cascadia Mono", Consolas, "Courier New", monospace;
+  }
+  #ac .item.sel { background: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <div class="left">
+    <div id="tabs" class="tabs"><strong data-i18n="code.tab_main"></strong></div>
+    <label class="wrapopt" data-i18n-title="code.wrap_title">
+      <input type="checkbox" id="wrap"> <span data-i18n="code.wrap"></span>
+    </label>
+  </div>
+  <span id="state" data-i18n="code.state_synced" data-i18n-title="code.state_title"></span>
+</header>
+<div id="findbar" class="findbar" hidden>
+  <div class="frow">
+    <input id="fq" data-i18n-placeholder="code.find.placeholder" spellcheck="false" autocomplete="off">
+    <button class="opt" id="fcase" aria-pressed="false" data-i18n-title="code.find.case">Aa</button>
+    <button class="opt" id="fword" aria-pressed="false" data-i18n-title="code.find.word">ab</button>
+    <button class="opt" id="fregex" aria-pressed="false" data-i18n-title="code.find.regex">.*</button>
+    <button id="fprev" data-i18n-title="code.find.prev">↑</button>
+    <button id="fnext" data-i18n-title="code.find.next">↓</button>
+    <span id="fcount" class="fcount"></span>
+    <button id="fclose" data-i18n-title="code.find.close">×</button>
+  </div>
+  <div class="frow" id="freplace" hidden>
+    <input id="fr" data-i18n-placeholder="code.find.replace_placeholder" spellcheck="false" autocomplete="off">
+    <button id="frep" data-i18n="code.find.replace" data-i18n-title="code.find.replace_title"></button>
+    <button id="frepall" data-i18n="code.find.replace_all" data-i18n-title="code.find.replace_all_title"></button>
+  </div>
+</div>
+<div class="body">
+  <div class="gutter" id="gutter" aria-hidden="true"><pre id="gn">1</pre></div>
+  <div class="editor">
+    <pre id="mk" aria-hidden="true"><code id="mkc"></code></pre>
+    <pre id="hl" aria-hidden="true"><code id="hlc"></code></pre>
+    <textarea id="src" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off"></textarea>
+    <span id="probe" class="mono"></span>
+    <div id="mirror" class="mono" aria-hidden="true"></div>
+    <div id="ac" role="listbox" hidden></div>
+  </div>
+</div>
+
+<script>
+/*HIGHLIGHT_JS*/
+</script>
+<script>
+/*COMPLETE_JS*/
+</script>
+<script>
+/*FIND_JS*/
+</script>
+<script>
+(function () {
+  const { t, tn } = window.__i18n;
+  window.__i18n.apply(document);
+  const send = (msg) => window.ipc.postMessage(JSON.stringify(msg));
+  const $ = (id) => document.getElementById(id);
+  const ta = $('src'), state = $('state'), hlc = $('hlc'), gn = $('gn'), gutter = $('gutter');
+  const ac = $('ac'), probe = $('probe'), mkc = $('mkc'), mirror = $('mirror'), wrapBox = $('wrap');
+  const DELAY_MS = 600;
+  // Medidas del editor: deben coincidir con el CSS (padding y line-height).
+  const PAD_L = 10, PAD_T = 8, LINE_H = 20;
+  let timer = null;
+  let applied = ''; // último texto que coincide con el documento de Rust
+  let suppress = false; // true mientras el propio editor inserta texto (no reabrir sugerencias)
+  let mode = 'html';    // 'html' (el documento) o 'css' (una hoja de estilo abierta)
+  let activePath = null; // ruta de la hoja activa; null = el documento
+  let lastTabs = '';
+  const complOpts = () => ({ css: mode === 'css' });
+
+  // ---------- Colores y números de línea ----------
+  let lastLines = 0;
+
+  // ---------- Ajuste de línea ----------
+  // Con el ajuste activo una línea del texto ocupa varias filas de pantalla. Un elemento oculto
+  // con el mismo ancho, fuente y reglas de ajuste (`#mirror`) reparte cada línea en un <div> y
+  // se mide su alto: de ahí salen los números de línea y la posición de cualquier punto del texto.
+  let wrapOn = false;
+  let tops = [];        // y (px, sin el relleno superior) de cada línea del texto
+  let rows = [];        // filas de pantalla de cada línea
+  let mirrorValue = null, mirrorWidth = 0;
+
+  function measure() {
+    mirrorWidth = ta.clientWidth;
+    mirrorValue = ta.value;
+    mirror.style.width = Math.max(40, mirrorWidth - PAD_L * 2) + 'px';
+    const frag = document.createDocumentFragment();
+    for (const line of mirrorValue.split('\n')) {
+      const d = document.createElement('div');
+      d.textContent = line === '' ? '​' : line; // una línea vacía también ocupa una fila
+      frag.append(d);
+    }
+    mirror.replaceChildren(frag);
+    tops = []; rows = [];
+    let y = 0;
+    for (const d of mirror.children) {
+      const h = Math.max(LINE_H, d.getBoundingClientRect().height);
+      tops.push(y);
+      rows.push(Math.max(1, Math.round(h / LINE_H)));
+      y += h;
+    }
+  }
+
+  // Punto del texto `pos` en coordenadas del contenido (sin el desplazamiento): la y de su fila
+  // y la x de su columna. Sin ajuste de línea es la cuenta sencilla por línea y columna.
+  function locate(pos) {
+    if (!wrapOn) {
+      const { line, col } = find.lineCol(ta.value, pos);
+      return { x: PAD_L + col * charW(), y: line * LINE_H };
+    }
+    if (mirrorValue !== ta.value || mirrorWidth !== ta.clientWidth) measure();
+    const before = ta.value.slice(0, pos);
+    const line = before.split('\n').length - 1;
+    const col = pos - (before.lastIndexOf('\n') + 1);
+    const d = mirror.children[line];
+    const text = d && d.firstChild;
+    let x = PAD_L, dy = 0;
+    if (text && col > 0 && col <= text.length && ta.value.charAt(pos - 1) !== '\n') {
+      const r = document.createRange();
+      r.setStart(text, col - 1);
+      r.setEnd(text, col);
+      const rect = r.getBoundingClientRect(), box = d.getBoundingClientRect();
+      x = PAD_L + rect.right - box.left;
+      dy = rect.top - box.top;
+    }
+    return { x, y: (tops[line] || 0) + dy };
+  }
+
+  function lineNumbers() {
+    const n = ta.value.split('\n').length;
+    gutter.style.width = 'calc(' + Math.max(2, String(n).length) + 'ch + 17px)';
+    if (wrapOn) {
+      // Cada línea lleva su número en la primera fila y filas en blanco en las que continúa.
+      measure();
+      let s = '';
+      for (let i = 0; i < n; i++) s += (i + 1) + '\n' + '\n'.repeat(rows[i] - 1);
+      gn.textContent = s;
+      lastLines = 0;
+      return;
+    }
+    if (n === lastLines) return;
+    lastLines = n;
+    let s = '';
+    for (let i = 1; i <= n; i++) s += i + '\n';
+    gn.textContent = s;
+  }
+
+  function setWrap(on, save) {
+    wrapOn = on;
+    wrapBox.checked = on;
+    document.body.classList.toggle('wrap', on);
+    ta.setAttribute('wrap', on ? 'soft' : 'off');
+    if (on) ta.scrollLeft = 0;
+    lastLines = 0;
+    if (save) { try { localStorage.setItem('tk-wrap-code', on ? '1' : '0'); } catch (_) { /* sin almacenamiento */ } }
+    paint();
+  }
+  wrapBox.addEventListener('change', () => setWrap(wrapBox.checked, true));
+
+  // Repinta los colores y alinea las capas con el desplazamiento del cuadro de texto.
+  // El salto final evita que la última línea vacía del texto quede sin altura.
+  function paint() {
+    const colored = mode === 'css' ? window.highlightCss(ta.value) : window.highlightHtml(ta.value);
+    hlc.innerHTML = colored + '\n';
+    // Las capas de color miden como el cuadro de texto: se les descuenta su barra de desplazamiento.
+    if (wrapOn) document.documentElement.style.setProperty('--sbw', (ta.offsetWidth - ta.clientWidth) + 'px');
+    lineNumbers();
+    scrollSync();
+  }
+  function scrollSync() {
+    const move = 'translate(' + -ta.scrollLeft + 'px,' + -ta.scrollTop + 'px)';
+    hlc.style.transform = move;
+    mkc.style.transform = move;
+    gn.style.transform = 'translateY(' + -ta.scrollTop + 'px)';
+  }
+  ta.addEventListener('scroll', () => { scrollSync(); hidePopup(); });
+
+  function setState(text, busy) {
+    state.textContent = text;
+    state.className = busy ? 'busy' : '';
+  }
+
+  function flush() {
+    clearTimeout(timer);
+    timer = null;
+    if (ta.value === applied) { setState(t('code.state_synced'), false); return; }
+    applied = ta.value;
+    if (mode === 'css') send({ type: 'SetFileText', path: activePath, text: ta.value });
+    else send({ type: 'SetSource', html: ta.value });
+    setState(t('code.state_applied'), false);
+  }
+
+  // Inserta texto en el cursor conservando el deshacer nativo del cuadro de texto.
+  function insert(text) {
+    if (document.execCommand('insertText', false, text)) return;
+    ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end');
+    ta.dispatchEvent(new Event('input'));
+  }
+  const caretAt = (p) => ta.setSelectionRange(p, p);
+
+  // ---------- Autocompletado ----------
+  let items = [], sel = 0, acFrom = 0;
+
+  function hidePopup() { items = []; ac.hidden = true; }
+
+  function caretXY(pos) {
+    if (wrapOn) {
+      const p = locate(pos);
+      return { x: p.x - ta.scrollLeft, y: PAD_T + p.y + LINE_H - ta.scrollTop };
+    }
+    const lines = ta.value.slice(0, pos).split('\n');
+    let col = 0;
+    for (const ch of lines[lines.length - 1]) col += ch === '\t' ? 2 - (col % 2) : 1;
+    const charW = probe.getBoundingClientRect().width / 100 || 7.8;
+    return { x: PAD_L + col * charW - ta.scrollLeft, y: PAD_T + lines.length * LINE_H - ta.scrollTop };
+  }
+
+  function renderPopup() {
+    ac.replaceChildren();
+    items.forEach((it, i) => {
+      const row = document.createElement('div');
+      row.className = 'item' + (i === sel ? ' sel' : '');
+      row.textContent = it.label;
+      row.addEventListener('mousedown', (e) => { e.preventDefault(); accept(it); });
+      ac.append(row);
+    });
+    const selected = ac.children[sel];
+    if (selected) selected.scrollIntoView({ block: 'nearest' });
+  }
+
+  function updatePopup(force) {
+    if (ta.selectionStart !== ta.selectionEnd) { hidePopup(); return; }
+    const a = window.htmlComplete.analyze(ta.value, ta.selectionStart, complOpts());
+    items = window.htmlComplete.suggest(a, force);
+    if (!items.length) { hidePopup(); return; }
+    acFrom = a.from;
+    sel = 0;
+    ac.hidden = false;
+    renderPopup();
+    // Bajo el cursor; si no cabe, encima.
+    const { x, y } = caretXY(ta.selectionStart);
+    const box = ta.getBoundingClientRect();
+    const h = ac.offsetHeight, w = ac.offsetWidth;
+    ac.style.left = Math.max(0, Math.min(x, box.width - w - 4)) + 'px';
+    ac.style.top = (y + h > box.height ? Math.max(0, y - LINE_H - h) : y) + 'px';
+  }
+
+  function accept(it) {
+    const end = ta.selectionStart;
+    suppress = true;
+    ta.setSelectionRange(acFrom, end);
+    insert(it.insert);
+    caretAt(acFrom + it.insert.length - it.back);
+    suppress = false;
+    hidePopup();
+  }
+
+  // Tras escribir «>» de una etiqueta de inicio, se añade su cierre.
+  function autoClose() {
+    if (mode !== 'html') return;
+    const pos = ta.selectionStart;
+    const close = window.htmlComplete.closingFor(ta.value, pos);
+    if (!close) return;
+    suppress = true;
+    insert(close);
+    caretAt(pos);
+    suppress = false;
+  }
+
+  // Enter conserva la sangría; entre «<x>|</x>» o «{|}» abre una línea intermedia.
+  function autoIndent(e) {
+    if (ta.selectionStart !== ta.selectionEnd) return;
+    const text = ta.value, pos = ta.selectionStart;
+    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+    const indent = /^[ \t]*/.exec(text.slice(lineStart, pos))[0];
+    const opener = text[pos - 1];
+    const between = (opener === '>' && text.startsWith('</', pos)) || (opener === '{' && text[pos] === '}');
+    e.preventDefault();
+    if (between) {
+      insert('\n' + indent + '  \n' + indent);
+      caretAt(pos + 1 + indent.length + 2);
+    } else {
+      insert('\n' + indent + (opener === '{' ? '  ' : ''));
+    }
+  }
+
+  // Tras «=» una comilla se completa con su pareja; ante la de cierre, se salta.
+  function pairQuote(e) {
+    if (mode !== 'html' || ta.selectionStart !== ta.selectionEnd) return;
+    const text = ta.value, pos = ta.selectionStart;
+    const a = window.htmlComplete.analyze(text, pos);
+    if (a.kind === 'quote' && a.quote === e.key && text[pos] === e.key) {
+      e.preventDefault();
+      caretAt(pos + 1);
+    } else if (a.kind === 'attrvalue' && text[pos - 1] === '=') {
+      e.preventDefault();
+      suppress = true;
+      insert(e.key + e.key);
+      caretAt(pos + 1);
+      suppress = false;
+    }
+  }
+
+  // ---------- Buscar y reemplazar ----------
+  const find = window.htmlFind;
+  const fbar = $('findbar'), fq = $('fq'), fr = $('fr'), fcount = $('fcount');
+  const fopt = { caseSensitive: false, regex: false, word: false };
+  let matches = [], cur = -1, truncated = false, findError = null;
+
+  function currentRegex() {
+    const { re, error } = find.compile(fq.value, fopt);
+    findError = error;
+    return re;
+  }
+
+  // Elemento que el lienzo tiene seleccionado: se marca en el código (sin tocar el foco).
+  let extMark = null;
+
+  function renderMarks() {
+    if (matches.length) mkc.innerHTML = find.marksHtml(ta.value, matches, cur) + '\n';
+    else if (extMark) mkc.innerHTML = find.marksHtml(ta.value, [extMark], 0) + '\n';
+    else mkc.innerHTML = '';
+    scrollSync();
+  }
+
+  function updateCount() {
+    fcount.classList.toggle('err', !!findError);
+    if (findError) fcount.textContent = t('status.warning_prefix') + findError;
+    else if (!fq.value) fcount.textContent = '';
+    else if (!matches.length) fcount.textContent = t('code.find.no_results');
+    else fcount.textContent = t('code.find.count', { current: cur + 1, total: matches.length + (truncated ? '+' : '') });
+    fcount.title = findError || '';
+  }
+
+  // Vuelve a buscar en el texto actual; la coincidencia actual pasa a ser la más cercana al cursor.
+  function runFind() {
+    const re = currentRegex();
+    const r = find.findAll(ta.value, re);
+    matches = r.matches;
+    truncated = r.truncated;
+    cur = matches.length ? find.stepFrom(matches, ta.selectionStart, 1) : -1;
+    renderMarks();
+    updateCount();
+  }
+  const refindIfOpen = () => { if (!fbar.hidden) runFind(); };
+
+  function charW() { return probe.getBoundingClientRect().width / 100 || 7.8; }
+
+  // Selecciona la coincidencia `i` y la trae a la vista, sin quitar el foco de la barra.
+  function reveal(i) {
+    const m = matches[i];
+    if (!m) return;
+    ta.setSelectionRange(m.start, m.end);
+    const { x, y } = locate(m.start);
+    if (y < ta.scrollTop || y > ta.scrollTop + ta.clientHeight - LINE_H * 3) {
+      ta.scrollTop = Math.max(0, y - ta.clientHeight / 3);
+    }
+    if (!wrapOn && (x < ta.scrollLeft || x > ta.scrollLeft + ta.clientWidth - 80)) {
+      ta.scrollLeft = Math.max(0, x - ta.clientWidth / 3);
+    }
+    scrollSync();
+  }
+
+  function step(dir) {
+    if (!matches.length) runFind();
+    if (!matches.length) return;
+    const pos = cur >= 0 ? (dir > 0 ? matches[cur].end : matches[cur].start) : ta.selectionStart;
+    cur = find.stepFrom(matches, pos, dir);
+    renderMarks();
+    updateCount();
+    reveal(cur);
+  }
+
+  // El texto se cambia desde el propio cuadro (con el foco un instante) para que el
+  // deshacer nativo y el flujo normal hacia Rust funcionen igual que al teclear.
+  function editText(selStart, selEnd, text) {
+    const back = document.activeElement;
+    ta.focus();
+    ta.setSelectionRange(selStart, selEnd);
+    suppress = true;
+    insert(text);
+    suppress = false;
+    if (back && back !== ta) back.focus();
+  }
+
+  function replaceOne() {
+    if (cur < 0) { step(1); return; }
+    const re = currentRegex();
+    const m = matches[cur];
+    const text = re && find.replacementAt(ta.value, m.start, re, fr.value, fopt.regex);
+    if (text === null || text === undefined || text === false) return;
+    editText(m.start, m.end, text); // el evento «input» vuelve a buscar y deja `cur` en la siguiente
+    if (matches.length) reveal(cur);
+  }
+
+  function replaceEverything() {
+    const re = currentRegex();
+    if (!re) return;
+    const result = find.replaceAll(ta.value, re, fr.value, fopt.regex);
+    if (!result.count) { updateCount(); return; }
+    const top = ta.scrollTop, left = ta.scrollLeft;
+    editText(0, ta.value.length, result.text);
+    ta.setSelectionRange(0, 0);
+    ta.scrollTop = top; ta.scrollLeft = left;
+    scrollSync();
+    fcount.classList.remove('err');
+    fcount.textContent = tn('code.find.replaced', result.count);
+  }
+
+  function openFind(withReplace) {
+    fbar.hidden = false;
+    $('freplace').hidden = !withReplace;
+    const picked = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+    if (picked && !picked.includes('\n')) fq.value = picked;
+    runFind();
+    (withReplace && fq.value ? fr : fq).focus();
+    if (document.activeElement === fq) fq.select();
+  }
+
+  function closeFind() {
+    fbar.hidden = true;
+    matches = []; cur = -1; findError = null;
+    renderMarks();
+    ta.focus();
+  }
+
+  for (const [id, key] of [['fcase', 'caseSensitive'], ['fword', 'word'], ['fregex', 'regex']]) {
+    $(id).addEventListener('click', () => {
+      fopt[key] = !fopt[key];
+      $(id).setAttribute('aria-pressed', String(fopt[key]));
+      runFind();
+      if (cur >= 0) reveal(cur);
+    });
+  }
+  fq.addEventListener('input', () => { runFind(); if (cur >= 0) reveal(cur); });
+  $('fnext').addEventListener('click', () => step(1));
+  $('fprev').addEventListener('click', () => step(-1));
+  $('frep').addEventListener('click', replaceOne);
+  $('frepall').addEventListener('click', replaceEverything);
+  $('fclose').addEventListener('click', closeFind);
+  for (const box of [fq, fr]) {
+    box.addEventListener('keydown', (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+      else if (e.key === 'F3' || (e.key === 'Enter' && box === fq)) { e.preventDefault(); step(e.shiftKey ? -1 : 1); }
+      else if (e.key === 'Enter' && box === fr) { e.preventDefault(); replaceOne(); }
+      else if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openFind(false); }
+      else if (mod && e.key.toLowerCase() === 'h') { e.preventDefault(); openFind(true); }
+    });
+  }
+
+  // ---------- Eventos del editor ----------
+  ta.addEventListener('input', (e) => {
+    clearExtMark();
+    paint();
+    refindIfOpen();
+    setState(t('code.state_typing'), true);
+    clearTimeout(timer);
+    timer = setTimeout(flush, DELAY_MS);
+    if (suppress) return;
+    if (e.inputType === 'insertText' && e.data === '>') autoClose();
+    updatePopup(false);
+  });
+  ta.addEventListener('blur', () => { hidePopup(); if (timer) flush(); });
+
+  // El cursor se mueve (clic o teclas de navegación): Rust selecciona ese elemento en el
+  // lienzo. Solo si el texto ya es el del documento y se trata del HTML.
+  let cursorTimer = null;
+  function reportCursor() {
+    clearTimeout(cursorTimer);
+    cursorTimer = setTimeout(() => {
+      if (mode !== 'html' || ta.value !== applied || ta.selectionStart !== ta.selectionEnd) return;
+      send({ type: 'CursorAt', offset: ta.selectionStart });
+    }, 120);
+  }
+  const NAV_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'];
+  ta.addEventListener('keyup', (e) => { if (NAV_KEYS.includes(e.key)) { clearExtMark(); reportCursor(); } });
+  ta.addEventListener('click', () => { hidePopup(); clearExtMark(); reportCursor(); });
+  function clearExtMark() {
+    if (!extMark) return;
+    extMark = null;
+    renderMarks();
+  }
+
+  ta.addEventListener('keydown', (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (!ac.hidden) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        sel = (sel + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+        renderPopup();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); accept(items[sel]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); hidePopup(); return; }
+    }
+    if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); openFind(false); return; }
+    if (mod && e.key.toLowerCase() === 'h') { e.preventDefault(); openFind(true); return; }
+    if (e.key === 'F3') { e.preventDefault(); if (fbar.hidden) openFind(false); else step(e.shiftKey ? -1 : 1); return; }
+    if (mod && e.code === 'Space') { e.preventDefault(); updatePopup(true); return; }
+    if (mod && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      flush();
+      send({ type: e.shiftKey ? 'SaveAs' : 'Save' });
+      return;
+    }
+    if (e.key === 'Tab' && !mod && !e.shiftKey) { e.preventDefault(); insert('  '); return; }
+    if (e.key === 'Enter' && !mod && !e.shiftKey && !e.altKey) { autoIndent(e); return; }
+    if ((e.key === '"' || e.key === "'") && !mod) pairQuote(e);
+  });
+
+  // Rust empuja el texto del documento. No se pisa lo que el usuario está escribiendo,
+  // salvo que sea un cambio de fondo (deshacer, abrir) y se pida con `force`.
+  window.__code = {
+    // Pestañas: el documento y las hojas de estilo abiertas. Solo se redibujan si cambian.
+    tabs(data) {
+      activePath = data.active;
+      const sig = JSON.stringify(data);
+      if (sig === lastTabs) return;
+      lastTabs = sig;
+      const bar = $('tabs');
+      bar.replaceChildren();
+      const add = (label, dirty, path, closable) => {
+        const tab = document.createElement('button');
+        tab.className = 'tab' + (path === data.active ? ' active' : '');
+        tab.title = path === null ? t('code.tab_document_title') : path;
+        if (dirty) {
+          const dot = document.createElement('span');
+          dot.className = 'dot'; dot.textContent = '●';
+          tab.append(dot);
+        }
+        tab.append(label);
+        if (closable) {
+          const x = document.createElement('span');
+          x.className = 'x'; x.textContent = '×'; x.title = t('code.tab_close');
+          x.addEventListener('click', (ev) => { ev.stopPropagation(); send({ type: 'CloseFile', path }); });
+          tab.append(x);
+        }
+        tab.addEventListener('click', () => { if (path !== data.active) send({ type: 'ActivateFile', path }); });
+        bar.append(tab);
+      };
+      add(data.main.name, data.main.dirty, null, false);
+      data.files.forEach((f) => add(f.path.split('/').pop(), f.dirty, f.path, true));
+    },
+    // Marca (sin enfocar) la etiqueta del elemento elegido en el lienzo y la trae a la vista.
+    show(line, col, len) {
+      const lines = ta.value.split('\n');
+      // Solo se llama por un clic en el lienzo, nunca mientras se escribe aquí: no hay que
+      // mirar el foco (`activeElement` sigue siendo el cuadro aunque el foco esté fuera).
+      if (line >= lines.length) return;
+      let start = 0;
+      for (let i = 0; i < line; i++) start += lines[i].length + 1;
+      start = Math.min(start + col, ta.value.length);
+      extMark = { start, end: Math.min(start + len, ta.value.length) };
+      const { x, y } = locate(start);
+      if (y < ta.scrollTop || y > ta.scrollTop + ta.clientHeight - LINE_H * 3) {
+        ta.scrollTop = Math.max(0, y - ta.clientHeight / 3);
+      }
+      // Líneas muy largas (HTML minificado): la etiqueta puede estar fuera de la vista a la derecha.
+      if (!wrapOn && (x < ta.scrollLeft || x > ta.scrollLeft + ta.clientWidth - 120)) {
+        ta.scrollLeft = Math.max(0, x - ta.clientWidth / 3);
+      }
+      renderMarks();
+    },
+    // Selecciona `len` caracteres desde la línea y columna (desde 0) y los trae a la vista.
+    goto(line, col, len) {
+      const lines = ta.value.split('\n');
+      if (line >= lines.length) return;
+      let start = 0;
+      for (let i = 0; i < line; i++) start += lines[i].length + 1;
+      start = Math.min(start + col, ta.value.length);
+      const end = Math.min(start + len, ta.value.length);
+      ta.focus();
+      ta.setSelectionRange(start, end);
+      const { x, y } = locate(start);
+      ta.scrollTop = Math.max(0, y - ta.clientHeight / 3);
+      ta.scrollLeft = wrapOn || x < ta.clientWidth - 80 ? 0 : Math.max(0, x - ta.clientWidth / 3);
+      scrollSync();
+    },
+    set(text, force, kind) {
+      const typing = document.hasFocus() && document.activeElement === ta;
+      if (typing && !force) return;
+      if (kind && kind !== mode) { mode = kind; lastLines = 0; }
+      if (ta.value === text) { paint(); refindIfOpen(); applied = text; setState(t('code.state_synced'), false); return; }
+      const top = ta.scrollTop, left = ta.scrollLeft;
+      extMark = null;
+      ta.value = text;
+      ta.scrollTop = top; ta.scrollLeft = left;
+      paint();
+      refindIfOpen();
+      hidePopup();
+      applied = text;
+      setState(t('code.state_synced'), false);
+    },
+  };
+
+  probe.textContent = 'x'.repeat(100);
+  // Con el ajuste de línea, al cambiar el ancho de la ventana se vuelven a repartir las líneas.
+  new ResizeObserver(() => { if (wrapOn && mirrorWidth !== ta.clientWidth) paint(); }).observe(ta);
+  let wrapPref = false;
+  try { wrapPref = localStorage.getItem('tk-wrap-code') === '1'; } catch (_) { /* sin almacenamiento */ }
+  setWrap(wrapPref, false);
+  paint();
+  send({ type: 'Ready' });
+})();
+</script>
+</body>
+</html>

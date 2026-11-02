@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/temiktli-core", "crates/temiktli-shell"]
+
+# Sin esto, `cargo run` compila html5ever sin optimizar y reinterpretar un documento largo
+# tarda ~10 veces más (cientos de ms por pulsación). Las dependencias se compilan una sola
+# vez, así que el coste solo se paga en la primera compilación.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.temiktli-core]
+opt-level = 2

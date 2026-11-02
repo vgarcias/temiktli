@@ -1,0 +1,16 @@
+[package]
+name = "temiktli-core"
+description = "Núcleo de Temiktli: documento HTML/CSS, historial de cambios y traducciones."
+version = "0.1.0-rc.1"
+license = "MIT"
+repository = "https://github.com/vgarcias/temiktli"
+authors = ["vgarcias"]
+edition = "2024"
+
+[dependencies]
+cssparser = "0.38.0"
+html5ever = "0.39"
+markup5ever = "0.39"
+markup5ever_rcdom = "0.39.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
