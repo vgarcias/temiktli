@@ -12,7 +12,7 @@ Los instaladores están en [Releases](https://github.com/vgarcias/temiktli/relea
 > Los instaladores **no están firmados**. Tu sistema mostrará un aviso la primera vez; es normal en proyectos de código abierto sin certificado de pago.
 
 ### Windows
-1. Descarga `Temiktli-<versión>-windows-x64-setup.exe` y ábrelo.
+1. Descarga [`Temiktli-<versión>-windows-x64-setup.exe`](https://github.com/vgarcias/temiktli/releases/download/untagged-822b24e49fdda6865d39/Temiktli-0.1.0-rc.1-windows-x64-setup.exe) y ábrelo. 
 2. SmartScreen dirá «Windows protegió su PC»: pulsa **Más información** → **Ejecutar de todas formas**.
 3. Windows 11 ya incluye WebView2. En Windows 10 sin él, instala el [runtime de WebView2](https://developer.microsoft.com/microsoft-edge/webview2/).
 
