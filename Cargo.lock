@@ -2192,7 +2192,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "temiktli-core"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "cssparser 0.38.0",
  "html5ever",
@@ -2204,7 +2204,7 @@ dependencies = [
 
 [[package]]
 name = "temiktli-shell"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 dependencies = [
  "dirs 6.0.0",
  "rfd",

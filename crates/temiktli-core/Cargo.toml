@@ -1,7 +1,7 @@
 [package]
 name = "temiktli-core"
 description = "Núcleo de Temiktli: documento HTML/CSS, historial de cambios y traducciones."
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 license = "MIT"
 repository = "https://github.com/vgarcias/temiktli"
 authors = ["vgarcias"]
