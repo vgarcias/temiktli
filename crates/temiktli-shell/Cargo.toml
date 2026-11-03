@@ -29,10 +29,7 @@ category = "DeveloperTool"
 long-description = "Editor visual de HTML y CSS para escritorio."
 license-file = "../../LICENSE"
 out-dir = "../../dist/packager"
-binaries-dir = "../../target/release"
-binaries = [{ path = "temiktli-shell", main = true }]
 icons = ["assets/icon.ico", "assets/icon-512.png", "assets/icon.icns"]
-before-packaging-command = "cargo build --release -p temiktli-shell"
 
 [package.metadata.packager.nsis]
 installer-mode = "currentUser"

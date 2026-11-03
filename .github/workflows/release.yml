@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    outputs:
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: La etiqueta coincide con la versión de Cargo.toml
+        run: |
+          bash scripts/check-version.sh "$GITHUB_REF_NAME" | tee -a "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x64, os: windows-latest, kind: windows, arch: x64, target: "" }
+          - { name: macos-arm64, os: macos-latest, kind: macos, arch: arm64, target: aarch64-apple-darwin }
+          - { name: macos-x64, os: macos-latest, kind: macos, arch: x64, target: x86_64-apple-darwin }
+          - { name: linux-x64, os: ubuntu-22.04, kind: linux, arch: x64, target: "" }
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Dependencias de Linux
+        if: matrix.kind == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Pruebas de Rust
+        run: cargo test --workspace
+      - name: Pruebas de JavaScript
+        shell: bash
+        run: for f in crates/temiktli-shell/assets/*.test.js; do node "$f" || exit 1; done
+
+      - name: Instalar cargo-packager
+        run: cargo install cargo-packager --locked --version 0.11.8
+
+      # ---------- Windows ----------
+      - name: Instalador de Windows
+        if: matrix.kind == 'windows'
+        shell: bash
+        run: |
+          cargo build --release -p temiktli-shell
+          (cd crates/temiktli-shell && cargo packager --release --formats nsis)
+
+      # ---------- macOS ----------
+      - name: Aplicación de macOS (.app firmada ad-hoc) y .dmg
+        if: matrix.kind == 'macos'
+        run: |
+          cargo build --release -p temiktli-shell --target ${{ matrix.target }}
+          (cd crates/temiktli-shell && cargo packager --release --formats app --target ${{ matrix.target }})
+          app=$(ls -d dist/packager/*.app | head -n 1)
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          stage=$(mktemp -d)
+          cp -R "$app" "$stage/"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname Temiktli -srcfolder "$stage" -ov -format UDZO dist/packager/Temiktli.dmg
+
+      # ---------- Linux ----------
+      - name: Paquete .deb
+        if: matrix.kind == 'linux'
+        run: |
+          cargo build --release -p temiktli-shell
+          (cd crates/temiktli-shell && cargo packager --release --formats deb)
+          # En Debian "0.1.0-rc.1" sería MÁS NUEVA que "0.1.0"; con "~" es más antigua.
+          if [[ "$VERSION" == *-* ]]; then
+            deb=$(ls dist/packager/*.deb | head -n 1)
+            tmp=$(mktemp -d)
+            dpkg-deb -R "$deb" "$tmp"
+            sed -i "s/^Version: .*/Version: ${VERSION/-/\~}/" "$tmp/DEBIAN/control"
+            dpkg-deb -b "$tmp" "$deb"
+          fi
+          dpkg -I "$(ls dist/packager/*.deb | head -n 1)" | grep -E "Version|Depends"
+      - name: AppImage (opcional)
+        if: matrix.kind == 'linux'
+        continue-on-error: true
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: (cd crates/temiktli-shell && cargo packager --release --formats appimage)
+
+      - name: Renombrar según la spec
+        shell: bash
+        run: bash scripts/collect-artifacts.sh ${{ matrix.kind }} ${{ matrix.arch }} "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/Temiktli-*
+          if-no-files-found: error
+
+  release:
+    needs: [check, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Sumas de verificación
+        run: cd dist && sha256sum Temiktli-* > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Borrador de la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          flags=""
+          [ "$PRERELEASE" = "true" ] && flags="--prerelease"
+          gh release create "$GITHUB_REF_NAME" --draft $flags \
+            --title "Temiktli ${GITHUB_REF_NAME#v}" \
+            --notes-file docs/release-notes-template.md \
+            dist/Temiktli-* dist/SHA256SUMS.txt
