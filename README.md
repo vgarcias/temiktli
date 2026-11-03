@@ -2,7 +2,7 @@
 
 Editor visual de HTML y CSS para escritorio (Windows, macOS y Linux). Código abierto bajo licencia MIT.
 
-![Temiktli Logo](logo.jpg){width='400px'}
+<img src="logo.jpg" width="260">
 
 
 ## Descargar
@@ -31,6 +31,10 @@ Los instaladores están en [Releases](https://github.com/vgarcias/temiktli/relea
 
 ### Verificar la descarga
 Descarga también `SHA256SUMS.txt` y ejecuta `sha256sum -c SHA256SUMS.txt --ignore-missing` (en macOS, `shasum -a 256 -c SHA256SUMS.txt`).
+
+## Captura de pantalla
+
+<img src="temiktli-01.png" width="400">
 
 ## Tus datos
 
