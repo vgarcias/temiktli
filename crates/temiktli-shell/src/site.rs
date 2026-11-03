@@ -141,6 +141,18 @@ pub fn wants_folder(rel: &str) -> bool {
     rel.ends_with('/') || !rel.rsplit('/').next().unwrap_or("").contains('.')
 }
 
+/// La entrada de `dir` que se llama `name` sin distinguir mayúsculas. Un sitio debe poder
+/// copiarse a Windows o macOS, donde `index.html` e `INDEX.HTML` son el mismo archivo, así que
+/// también en Linux (donde el sistema de archivos sí los distingue) cuentan como existentes.
+fn entry_named(dir: &Path, name: &str) -> Option<PathBuf> {
+    let wanted = name.to_lowercase();
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().to_lowercase() == wanted)
+        .map(|e| e.path())
+}
+
 /// Ruta absoluta de la carpeta nueva `rel`, creando las intermedias que falten. Cada
 /// componente que ya existe debe ser una carpeta que, resuelta, siga dentro del sitio (un
 /// enlace simbólico no puede sacar la creación de él). No se admite una que ya exista.
@@ -154,10 +166,9 @@ pub fn new_folder_target(root: &Path, rel: &str) -> Result<PathBuf, String> {
     let root = root.canonicalize().map_err(|e| t!("site.root_unreadable", error = e))?;
     let mut base = root.clone();
     for (i, part) in parts.iter().enumerate() {
-        let next = base.join(part);
-        if !next.exists() {
+        let Some(next) = entry_named(&base, part) else {
             return Ok(base.join(parts[i..].join("/")));
-        }
+        };
         base = next.canonicalize().map_err(|e| t!("site.unresolved", name = part, error = e))?;
         if !base.starts_with(&root) || !base.is_dir() {
             return Err(t!("site.not_a_site_folder", name = part));
@@ -185,7 +196,7 @@ pub fn new_file_target(root: &Path, rel: &str) -> Result<PathBuf, String> {
         return Err(t("site.folder_outside"));
     }
     let target = dir.join(name);
-    if target.exists() {
+    if entry_named(&dir, name).is_some() {
         return Err(t!("site.already_exists", path = rel));
     }
     Ok(target)
@@ -449,5 +460,18 @@ mod tests {
         assert!(is_linked(html, "css/main.css"));
         assert!(!is_linked(html, "css/other.css"));
         assert!(!is_linked("<p>css/main.css</p>", "css/main.css"));
+    }
+
+    #[test]
+    fn entry_named_ignores_case_on_every_system() {
+        let root = std::env::temp_dir().join(format!("tk-entry-named-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("css")).unwrap();
+        std::fs::write(root.join("index.html"), "").unwrap();
+        assert_eq!(entry_named(&root, "INDEX.HTML"), Some(root.join("index.html")));
+        assert_eq!(entry_named(&root, "Css"), Some(root.join("css")));
+        assert_eq!(entry_named(&root, "otro.html"), None);
+        assert_eq!(entry_named(&root.join("no-existe"), "x"), None);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
