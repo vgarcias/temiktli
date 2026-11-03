@@ -2,6 +2,9 @@
 
 Editor visual de HTML y CSS para escritorio (Windows, macOS y Linux). Código abierto bajo licencia MIT.
 
+![Temiktli Logo](logo.jpg){width='400px'}
+
+
 ## Descargar
 
 Los instaladores están en [Releases](https://github.com/vgarcias/temiktli/releases). Elige el de tu sistema; las instrucciones de cada uno están justo debajo.
