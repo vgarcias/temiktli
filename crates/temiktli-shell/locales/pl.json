@@ -423,6 +423,7 @@
     "fixed": "Naprawiono: {label}",
 
     "language_saved": "Język: {name}. Obowiązuje po ponownym uruchomieniu Temiktli",
+    "language_no_storage": "⚠ Brak miejsca na zapis języka: obowiązuje tylko w tej sesji",
     "language_save_failed": "⚠ Nie udało się zapisać języka: {error}"
   },
 

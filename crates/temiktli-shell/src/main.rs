@@ -1815,7 +1815,7 @@ impl App {
             i18n::language_names().into_iter().find(|(c, _)| *c == lang).map(|(_, n)| n).unwrap_or_default()
         };
         let Some(path) = &self.config_path else {
-            self.status = t!("status.language_save_failed", error = "APPDATA");
+            self.status = t("status.language_no_storage");
             return;
         };
         let mut cfg = config::load(path);

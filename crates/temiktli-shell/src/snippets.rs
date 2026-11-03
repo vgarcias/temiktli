@@ -1,6 +1,6 @@
 //! Snippets: fragmentos HTML con nombre que se guardan una vez y se reinsertan donde se quiera.
 //! Los de serie vienen con el editor y no se tocan; los del usuario se guardan en un archivo
-//! suyo (`%APPDATA%\Temiktli\snippets.json`), no dentro de cada sitio, para que estén en
+//! suyo (`snippets.json`, en la carpeta de configuración del sistema), no dentro de cada sitio, para que estén en
 //! cualquier documento y no ensucien las carpetas del proyecto.
 
 use serde::{Deserialize, Serialize};
@@ -31,13 +31,14 @@ pub fn builtins() -> Vec<Snippet> {
     ["card", "header", "contact_form", "footer", "section"].into_iter().map(snippet).collect()
 }
 
-/// Dónde se guarda el archivo del usuario: la carpeta de datos de aplicaciones del sistema.
+/// Dónde se guarda el archivo del usuario: la carpeta de configuración estándar del sistema
+/// (`%APPDATA%` en Windows, `~/Library/Application Support` en macOS, `~/.config` en Linux).
 pub fn storage_path() -> Option<PathBuf> {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from))
-        .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(".config")))?;
-    Some(base.join("Temiktli").join("snippets.json"))
+    storage_path_in(dirs::config_dir())
+}
+
+fn storage_path_in(config_dir: Option<PathBuf>) -> Option<PathBuf> {
+    Some(config_dir?.join("Temiktli").join("snippets.json"))
 }
 
 /// Un nombre válido: con texto, sin saltos de línea y no demasiado largo.
@@ -200,5 +201,31 @@ mod tests {
             assert_eq!(counts.errors, 0, "{}: {:#?}", b.name, after.lint());
             assert_eq!(counts.warnings, 0, "{}: {:#?}", b.name, after.lint());
         }
+    }
+
+    #[test]
+    fn storage_path_in_appends_app_folder() {
+        let p = storage_path_in(Some(PathBuf::from("base"))).unwrap();
+        assert_eq!(p, PathBuf::from("base").join("Temiktli").join("snippets.json"));
+    }
+
+    #[test]
+    fn storage_path_in_none_gives_none() {
+        assert_eq!(storage_path_in(None), None);
+    }
+
+    #[test]
+    fn storage_path_handles_spaces_and_non_ascii() {
+        let base = PathBuf::from("José Pérez").join("Application Support");
+        let p = storage_path_in(Some(base.clone())).unwrap();
+        assert!(p.starts_with(&base));
+        assert_eq!(p.file_name().unwrap(), "snippets.json");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_data_dir_is_still_appdata() {
+        let appdata = PathBuf::from(std::env::var_os("APPDATA").unwrap());
+        assert_eq!(storage_path().unwrap(), appdata.join("Temiktli").join("snippets.json"));
     }
 }

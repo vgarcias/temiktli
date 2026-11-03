@@ -423,6 +423,7 @@
     "fixed": "Fixed: {label}",
 
     "language_saved": "Language: {name}. Applies when Temiktli restarts",
+    "language_no_storage": "⚠ Nowhere to save the language: it only applies to this session",
     "language_save_failed": "⚠ Could not save the language: {error}"
   },
 
