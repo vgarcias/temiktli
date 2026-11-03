@@ -19,3 +19,23 @@ wry = "0.57.1"
 
 [build-dependencies]
 winresource = "0.1"
+
+[package.metadata.packager]
+product-name = "Temiktli"
+identifier = "io.github.vgarcias.temiktli"
+publisher = "vgarcias"
+homepage = "https://github.com/vgarcias/temiktli"
+category = "DeveloperTool"
+long-description = "Editor visual de HTML y CSS para escritorio."
+license-file = "../../LICENSE"
+out-dir = "../../dist/packager"
+binaries-dir = "../../target/release"
+binaries = [{ path = "temiktli-shell", main = true }]
+icons = ["assets/icon.ico", "assets/icon-512.png", "assets/icon.icns"]
+before-packaging-command = "cargo build --release -p temiktli-shell"
+
+[package.metadata.packager.nsis]
+installer-mode = "currentUser"
+
+[package.metadata.packager.deb]
+depends = ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
