@@ -2,6 +2,9 @@
 //! (proyección del DOM de Rust) y el panel ofrece Propiedades e Insertar. Toda
 //! edición pasa por un `Command` y vuelve al lienzo como `Patch`.
 
+// Sin consola en Windows al abrir la aplicación; en desarrollo (debug) se conserva para ver los logs.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod config;
 mod fileops;
 mod relink;
@@ -2604,6 +2607,14 @@ mod tests {
     }
 
     #[test]
+    fn startup_failure_text_names_the_error_and_the_runtime_to_install() {
+        let text = startup_failure_text("COM error 0x80070002");
+        assert!(text.contains("COM error 0x80070002"), "{text}");
+        assert!(text.contains("developer.microsoft.com/microsoft-edge/webview2"), "{text}");
+        assert!(text.contains("libwebkit2gtk-4.1"), "{text}");
+    }
+
+    #[test]
     fn the_initial_window_keeps_room_below_it() {
         let area = (0, 0, 1920, 1040); // pantalla de 1080 menos una barra de tareas de 40
         // Cabe: solo se centra.
@@ -3362,7 +3373,25 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> (Option<String>, Option
     (lang, path)
 }
 
-fn main() -> wry::Result<()> {
+/// Texto del aviso cuando la aplicación no puede arrancar (típicamente, falta el motor web:
+/// WebView2 en Windows 10 o WebKitGTK en Linux).
+fn startup_failure_text(error: &str) -> String {
+    t!("status.startup_failed", error = error)
+}
+
+fn main() {
+    if let Err(e) = run() {
+        // Sin consola (subsistema gráfico) un error de arranque sería invisible.
+        MessageDialog::new()
+            .set_level(MessageLevel::Error)
+            .set_title(t("status.startup_failed_title"))
+            .set_description(startup_failure_text(&e.to_string()))
+            .show();
+        std::process::exit(1);
+    }
+}
+
+fn run() -> wry::Result<()> {
     // Idioma de la interfaz: --lang, TEMIKTLI_LANG, config.json, el de Windows, inglés.
     let (cli_lang, arg_path) = parse_args(std::env::args().skip(1));
     let config_path = config::storage_path();

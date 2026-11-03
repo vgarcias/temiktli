@@ -423,6 +423,8 @@
     "fixed": "Naprawiono: {label}",
 
     "language_saved": "Język: {name}. Obowiązuje po ponownym uruchomieniu Temiktli",
+    "startup_failed_title": "Temiktli nie mógł się uruchomić",
+    "startup_failed": "{error}\n\nW systemie Windows 10 zainstaluj środowisko WebView2: https://developer.microsoft.com/microsoft-edge/webview2/\nW systemie Linux zainstaluj WebKitGTK 4.1 (libwebkit2gtk-4.1-0).",
     "language_no_storage": "⚠ Brak miejsca na zapis języka: obowiązuje tylko w tej sesji",
     "language_save_failed": "⚠ Nie udało się zapisać języka: {error}"
   },

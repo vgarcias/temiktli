@@ -423,6 +423,8 @@
     "fixed": "Corrigido: {label}",
 
     "language_saved": "Idioma: {name}. Aplica-se ao reiniciar o Temiktli",
+    "startup_failed_title": "O Temiktli não conseguiu iniciar",
+    "startup_failed": "{error}\n\nNo Windows 10, instale o runtime do WebView2: https://developer.microsoft.com/microsoft-edge/webview2/\nNo Linux, instale o WebKitGTK 4.1 (libwebkit2gtk-4.1-0).",
     "language_no_storage": "⚠ Não há onde guardar o idioma: só se aplica nesta sessão",
     "language_save_failed": "⚠ Não foi possível salvar o idioma: {error}"
   },
