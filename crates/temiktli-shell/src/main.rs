@@ -2594,6 +2594,16 @@ mod tests {
     }
 
     #[test]
+    fn packaging_icons_exist_and_are_valid() {
+        let icns: &[u8] = include_bytes!("../assets/icon.icns");
+        assert_eq!(&icns[..4], b"icns");
+        let png: &[u8] = include_bytes!("../assets/icon-512.png");
+        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]);
+        let width = u32::from_be_bytes(png[16..20].try_into().unwrap());
+        assert!(width >= 512, "icon-512.png mide {width} px de ancho");
+    }
+
+    #[test]
     fn the_initial_window_keeps_room_below_it() {
         let area = (0, 0, 1920, 1040); // pantalla de 1080 menos una barra de tareas de 40
         // Cabe: solo se centra.
